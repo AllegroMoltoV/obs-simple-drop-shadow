@@ -1,59 +1,83 @@
-# OBS Plugin Template
+# Simple Drop Shadow Plugin for OBS Studio
 
-## Introduction
+OBS Studio 向けのシンプルなドロップシャドウフィルタプラグインです。
 
-The plugin template is meant to be used as a starting point for OBS Studio plugin development. It includes:
+A simple drop shadow filter plugin for OBS Studio.
 
-* Boilerplate plugin source code
-* A CMake project file
-* GitHub Actions workflows and repository actions
+## Features / 機能
 
-## Supported Build Environments
+映像ソースにドロップシャドウ（影）を追加するエフェクトフィルタです。
 
-| Platform  | Tool   |
-|-----------|--------|
-| Windows   | Visual Studio 17 2022 |
-| macOS     | XCode 16.0 |
-| Windows, macOS  | CMake 3.30.5 |
-| Ubuntu 24.04 | CMake 3.28.3 |
-| Ubuntu 24.04 | `ninja-build` |
-| Ubuntu 24.04 | `pkg-config`
-| Ubuntu 24.04 | `build-essential` |
+- **X Position / X座標** - 影の水平方向オフセット
+- **Y Position / Y座標** - 影の垂直方向オフセット
+- **Blur Radius / ぼかし半径** - 影のぼかし量
+- **Color / 色** - 影の色
+- **Opacity / 不透明度** - 影の透明度
 
-## Quick Start
+## Installation / インストール
 
-An absolute bare-bones [Quick Start Guide](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide) is available in the wiki.
+### Windows
 
-## Documentation
+1. [Releases](../../releases) から最新の zip ファイルをダウンロード
+2. zip を展開し、`simple-drop-shadow` フォルダを `%PROGRAMDATA%\obs-studio\plugins\` にコピー
+3. OBS Studio を再起動
 
-All documentation can be found in the [Plugin Template Wiki](https://github.com/obsproject/obs-plugintemplate/wiki).
+### macOS / Linux
 
-Suggested reading to get up and running:
+現在 Windows のみ動作確認済みです。macOS / Linux 向けビルドは GitHub Actions で生成されますが、動作未検証です。
 
-* [Getting started](https://github.com/obsproject/obs-plugintemplate/wiki/Getting-Started)
-* [Build system requirements](https://github.com/obsproject/obs-plugintemplate/wiki/Build-System-Requirements)
-* [Build system options](https://github.com/obsproject/obs-plugintemplate/wiki/CMake-Build-System-Options)
+## Usage / 使い方
 
-## GitHub Actions & CI
+1. OBS Studio を起動
+2. 映像ソースを右クリック → **フィルタ**
+3. エフェクトフィルタの **+** ボタン → **Drop Shadow** (または **ドロップシャドウ**) を追加
+4. パラメータを調整
 
-Default GitHub Actions workflows are available for the following repository actions:
+## Parameters / パラメータ
 
-* `push`: Run for commits or tags pushed to `master` or `main` branches.
-* `pr-pull`: Run when a Pull Request has been pushed or synchronized.
-* `dispatch`: Run when triggered by the workflow dispatch in GitHub's user interface.
-* `build-project`: Builds the actual project and is triggered by other workflows.
-* `check-format`: Checks CMake and plugin source code formatting and is triggered by other workflows.
+| Parameter | 日本語 | Range | Default |
+|-----------|--------|-------|---------|
+| X Position | X座標 | -100 ~ 100 | 4.0 |
+| Y Position | Y座標 | -100 ~ 100 | 4.0 |
+| Blur Radius | ぼかし半径 | 0 ~ 20 | 4.0 |
+| Color | 色 | - | Black |
+| Opacity | 不透明度 | 0 ~ 1 | 0.6 |
 
-The workflows make use of GitHub repository actions (contained in `.github/actions`) and build scripts (contained in `.github/scripts`) which are not needed for local development, but might need to be adjusted if additional/different steps are required to build the plugin.
+## Build / ビルド
 
-### Retrieving build artifacts
+### Requirements / 必要環境
 
-Successful builds on GitHub Actions will produce build artifacts that can be downloaded for testing. These artifacts are commonly simple archives and will not contain package installers or installation programs.
+| Platform | Tool |
+|----------|------|
+| Windows | Visual Studio 17 2022 |
+| Windows | CMake 3.28+ |
+| macOS | Xcode 16.0, CMake 3.28+ |
+| Ubuntu 24.04 | ninja-build, pkg-config, build-essential, CMake 3.28+ |
 
-### Building a Release
+### Build Commands / ビルドコマンド
 
-To create a release, an appropriately named tag needs to be pushed to the `main`/`master` branch using semantic versioning (e.g., `12.3.4`, `23.4.5-beta2`). A draft release will be created on the associated repository with generated installer packages or installation programs attached as release artifacts.
+```bash
+# Windows
+cmake --preset windows-x64
+cmake --build build_x64 --config RelWithDebInfo
 
-## Signing and Notarizing on macOS
+# macOS
+cmake --preset macos
+cmake --build build_macos --config RelWithDebInfo
 
-Basic concepts of codesigning and notarization on macOS are explained in the correspodning [Wiki article](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS) which has a specific section for the [GitHub Actions setup](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS#setting-up-code-signing-for-github-actions).
+# Ubuntu
+cmake --preset ubuntu-x86_64
+cmake --build build_x86_64 --config RelWithDebInfo
+```
+
+ローカル開発時は `CMakeUserPresets.json` で `CMAKE_INSTALL_PREFIX` を設定すると、ビルド後に自動インストールされます。
+
+## License / ライセンス
+
+GPL-2.0 License
+
+このプラグインは [obs-plugintemplate](https://github.com/obsproject/obs-plugintemplate) をベースにしています。
+
+## Author / 作者
+
+AllegroMoltoV - https://www.allegromoltov.jp

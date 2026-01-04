@@ -1,0 +1,90 @@
+// Drop Shadow Effect for OBS Studio
+// Simple drop shadow with offset, blur, color, and opacity
+
+uniform float4x4 ViewProj;
+uniform texture2d image;
+
+uniform float2 shadow_offset;
+uniform float blur_radius;
+uniform float4 shadow_color;
+uniform float shadow_opacity;
+uniform float2 texel_size;
+
+sampler_state defaultSampler {
+    Filter   = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertInOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertInOut VSDefault(VertInOut v_in)
+{
+    VertInOut v_out;
+    v_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    v_out.uv  = v_in.uv;
+    return v_out;
+}
+
+float4 PSDropShadow(VertInOut v_in) : TARGET
+{
+    float2 uv = v_in.uv;
+
+    // Sample original image
+    float4 original = image.Sample(defaultSampler, uv);
+
+    // Calculate shadow UV with offset (in texel units)
+    float2 shadow_uv = uv - shadow_offset * texel_size;
+
+    // Sample shadow with blur
+    float shadow_alpha = 0.0;
+
+    if (blur_radius > 0.0) {
+        // Box blur approximation
+        float blur_samples = 0.0;
+        int radius = (int)ceil(blur_radius);
+
+        for (int x = -radius; x <= radius; x++) {
+            for (int y = -radius; y <= radius; y++) {
+                float2 offset = float2((float)x, (float)y) * texel_size;
+                float4 s = image.Sample(defaultSampler, shadow_uv + offset);
+                shadow_alpha += s.a;
+                blur_samples += 1.0;
+            }
+        }
+        shadow_alpha /= blur_samples;
+    } else {
+        float4 shadow_sample = image.Sample(defaultSampler, shadow_uv);
+        shadow_alpha = shadow_sample.a;
+    }
+
+    // Apply shadow color and opacity
+    float4 shadow = float4(shadow_color.rgb, shadow_alpha * shadow_opacity * shadow_color.a);
+
+    // Composite: shadow behind original
+    // Using standard alpha blending: result = src * src.a + dst * (1 - src.a)
+    float4 result;
+    result.rgb = original.rgb * original.a + shadow.rgb * shadow.a * (1.0 - original.a);
+    result.a = original.a + shadow.a * (1.0 - original.a);
+
+    // Premultiply alpha for correct blending
+    if (result.a > 0.0) {
+        result.rgb /= result.a;
+    }
+
+    result.rgb *= result.a;
+
+    return result;
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader  = PSDropShadow(v_in);
+    }
+}
