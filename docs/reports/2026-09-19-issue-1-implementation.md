@@ -20,4 +20,6 @@ Visual Studio 2022で `cmake --build build_x64 --config RelWithDebInfo` が成�
 
 実フィルタの統合テストは、変更前の描画経路を使うと期待した3×3の影にならず、横一列だけが描画されることを確認してから実装した。画像端のテストも、修正前に期待値85に対し57で失敗することを確認した。実行記録はローカルの `.logs/pipeline-red-test3-20260919.log`、`.logs/edge-red-test-20260919.log`、`.logs/format-test-20260919.log` にある。
 
-OBSアプリケーションの実機画面での利用者確認は未了である。macOSとLinuxでのビルドと動作、実環境のフレーム時間も未検証である。releaseは実機確認後に進める。
+`buildspec.json`を0.1.1に更新した配布候補をVisual Studio 2022のRelWithDebInfoで再ビルドし、同じ11件のテストに通した。DLLのFileVersionとProductVersionは0.1.1である。配布候補ZIPのSHA-256は`B744E120A498AED68E1F6F42B8CBFAEBC29F48EEE9146B03DD3005AED5547E25`で、展開した5ファイルはOBSへの設置物と一致した。
+
+利用者は、この版を導入したOBSの実機画面でフィルタ表示、ぼかし半径0・4・20、X/Y位置、色、不透明度を確認し、問題なしと報告した。macOSとLinuxでのビルドと動作、実環境のフレーム時間は未検証である。GitHub releaseは未公開である。
