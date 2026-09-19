@@ -21,11 +21,15 @@ public:
 		}
 
 		if (effect_) {
+			param_image_ = gs_effect_get_param_by_name(effect_, "image");
+			param_blurred_image_ = gs_effect_get_param_by_name(effect_, "blurred_image");
 			param_shadow_offset_ = gs_effect_get_param_by_name(effect_, "shadow_offset");
 			param_blur_radius_ = gs_effect_get_param_by_name(effect_, "blur_radius");
 			param_shadow_color_ = gs_effect_get_param_by_name(effect_, "shadow_color");
 			param_shadow_opacity_ = gs_effect_get_param_by_name(effect_, "shadow_opacity");
 			param_texel_size_ = gs_effect_get_param_by_name(effect_, "texel_size");
+			source_render_ = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+			horizontal_render_ = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
 		} else {
 			obs_log(LOG_WARNING, "[drop_shadow] Failed to load effect: effects/drop-shadow.effect");
 		}
@@ -38,6 +42,8 @@ public:
 	~DropShadowFilter()
 	{
 		obs_enter_graphics();
+		gs_texrender_destroy(horizontal_render_);
+		gs_texrender_destroy(source_render_);
 		if (effect_) {
 			gs_effect_destroy(effect_);
 			effect_ = nullptr;
@@ -58,17 +64,19 @@ public:
 
 	void Render()
 	{
-		if (!effect_ || !param_shadow_offset_ || !param_blur_radius_ || !param_shadow_color_ ||
-		    !param_shadow_opacity_ || !param_texel_size_) {
+		if (!effect_ || !source_render_ || !horizontal_render_ || !param_image_ || !param_blurred_image_ ||
+		    !param_shadow_offset_ || !param_blur_radius_ || !param_shadow_color_ || !param_shadow_opacity_ ||
+		    !param_texel_size_ || !gs_effect_get_technique(effect_, "Horizontal") ||
+		    !gs_effect_get_technique(effect_, "VerticalComposite")) {
 			obs_source_skip_video_filter(context_);
 			return;
 		}
 
-		if (!obs_source_process_filter_begin(context_, GS_RGBA, OBS_ALLOW_DIRECT_RENDERING)) {
+		obs_source_t *target = obs_filter_get_target(context_);
+		obs_source_t *parent = obs_filter_get_parent(context_);
+		if (!target || !parent) {
 			return;
 		}
-
-		obs_source_t *target = obs_filter_get_target(context_);
 		uint32_t width = obs_source_get_base_width(target);
 		uint32_t height = obs_source_get_base_height(target);
 
@@ -87,11 +95,68 @@ public:
 
 		gs_effect_set_vec2(param_shadow_offset_, &shadow_offset);
 		gs_effect_set_float(param_blur_radius_, blur_radius_);
+		gs_effect_set_vec2(param_texel_size_, &texel_size);
+
+		gs_texrender_reset(source_render_);
+		if (!gs_texrender_begin_with_color_space(source_render_, width, height, GS_CS_SRGB)) {
+			obs_source_skip_video_filter(context_);
+			return;
+		}
+		gs_blend_state_push();
+		gs_blend_function_separate(GS_BLEND_SRCALPHA, GS_BLEND_INVSRCALPHA, GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+		struct vec4 clear = {};
+		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
+		gs_ortho(0.0f, static_cast<float>(width), 0.0f, static_cast<float>(height), -100.0f, 100.0f);
+		const uint32_t parent_flags = obs_source_get_output_flags(parent);
+		if (target == parent && !(parent_flags & OBS_SOURCE_CUSTOM_DRAW) &&
+		    !(parent_flags & OBS_SOURCE_ASYNC)) {
+			obs_source_default_render(target);
+		} else {
+			obs_source_video_render(target);
+		}
+		gs_blend_state_pop();
+		gs_texrender_end(source_render_);
+
+		gs_texture_t *source_texture = gs_texrender_get_texture(source_render_);
+		if (!source_texture) {
+			obs_source_skip_video_filter(context_);
+			return;
+		}
+
+		gs_texrender_reset(horizontal_render_);
+		if (!gs_texrender_begin_with_color_space(horizontal_render_, width, height, GS_CS_SRGB)) {
+			obs_source_skip_video_filter(context_);
+			return;
+		}
+		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
+		gs_ortho(0.0f, static_cast<float>(width), 0.0f, static_cast<float>(height), -100.0f, 100.0f);
+		gs_blend_state_push();
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
+		gs_effect_set_texture(param_image_, source_texture);
+		while (gs_effect_loop(effect_, "Horizontal")) {
+			gs_draw_sprite(source_texture, 0, width, height);
+		}
+		gs_blend_state_pop();
+		gs_texrender_end(horizontal_render_);
+
+		gs_texture_t *blurred_texture = gs_texrender_get_texture(horizontal_render_);
+		if (!blurred_texture) {
+			obs_source_skip_video_filter(context_);
+			return;
+		}
+		gs_effect_set_texture(param_image_, source_texture);
+		gs_effect_set_texture(param_blurred_image_, blurred_texture);
+		gs_effect_set_vec2(param_shadow_offset_, &shadow_offset);
+		gs_effect_set_float(param_blur_radius_, blur_radius_);
 		gs_effect_set_vec4(param_shadow_color_, &shadow_color_);
 		gs_effect_set_float(param_shadow_opacity_, opacity_);
 		gs_effect_set_vec2(param_texel_size_, &texel_size);
-
-		obs_source_process_filter_end(context_, effect_, 0, 0);
+		gs_blend_state_push();
+		gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+		while (gs_effect_loop(effect_, "VerticalComposite")) {
+			gs_draw_sprite(source_texture, 0, width, height);
+		}
+		gs_blend_state_pop();
 	}
 
 	static const char *GetName(void *unused)
@@ -146,6 +211,10 @@ private:
 	obs_source_t *context_ = nullptr;
 
 	gs_effect_t *effect_ = nullptr;
+	gs_texrender_t *source_render_ = nullptr;
+	gs_texrender_t *horizontal_render_ = nullptr;
+	gs_eparam_t *param_image_ = nullptr;
+	gs_eparam_t *param_blurred_image_ = nullptr;
 	gs_eparam_t *param_shadow_offset_ = nullptr;
 	gs_eparam_t *param_blur_radius_ = nullptr;
 	gs_eparam_t *param_shadow_color_ = nullptr;

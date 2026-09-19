@@ -3,10 +3,12 @@
 
 # Except for default project files
 !/.github
+!/docs
 !/build-aux
 !/cmake
 !/data
 !/src
+!/tests
 !.clang-format
 !.gersemirc
 !.gitignore

@@ -3,6 +3,7 @@
 
 uniform float4x4 ViewProj;
 uniform texture2d image;
+uniform texture2d blurred_image;
 
 uniform float2 shadow_offset;
 uniform float blur_radius;
@@ -29,62 +30,63 @@ VertInOut VSDefault(VertInOut v_in)
     return v_out;
 }
 
-float4 PSDropShadow(VertInOut v_in) : TARGET
+float4 PSHorizontal(VertInOut v_in) : TARGET
 {
-    float2 uv = v_in.uv;
+    int radius = (int)ceil(blur_radius);
+    float alpha = 0.0;
+    float2 shadow_uv = v_in.uv - float2(shadow_offset.x * texel_size.x, 0.0);
 
-    // Sample original image
-    float4 original = image.Sample(defaultSampler, uv);
-
-    // Calculate shadow UV with offset (in texel units)
-    float2 shadow_uv = uv - shadow_offset * texel_size;
-
-    // Sample shadow with blur
-    float shadow_alpha = 0.0;
-
-    if (blur_radius > 0.0) {
-        // Box blur approximation
-        float blur_samples = 0.0;
-        int radius = (int)ceil(blur_radius);
-
-        for (int x = -radius; x <= radius; x++) {
-            for (int y = -radius; y <= radius; y++) {
-                float2 offset = float2((float)x, (float)y) * texel_size;
-                float4 s = image.Sample(defaultSampler, shadow_uv + offset);
-                shadow_alpha += s.a;
-                blur_samples += 1.0;
-            }
-        }
-        shadow_alpha /= blur_samples;
-    } else {
-        float4 shadow_sample = image.Sample(defaultSampler, shadow_uv);
-        shadow_alpha = shadow_sample.a;
+    for (int x = -radius; x <= radius; x++) {
+        float2 offset = float2((float)x * texel_size.x, 0.0);
+        alpha += image.Sample(defaultSampler, shadow_uv + offset).a;
     }
 
-    // Apply shadow color and opacity
-    float4 shadow = float4(shadow_color.rgb, shadow_alpha * shadow_opacity * shadow_color.a);
+    return float4(0.0, 0.0, 0.0, alpha / (float)(2 * radius + 1));
+}
 
-    // Composite: shadow behind original
-    // Using standard alpha blending: result = src * src.a + dst * (1 - src.a)
+float4 CompositeShadow(float4 original, float shadow_alpha)
+{
+    float4 shadow = float4(shadow_color.rgb, shadow_alpha * shadow_opacity * shadow_color.a);
     float4 result;
     result.rgb = original.rgb * original.a + shadow.rgb * shadow.a * (1.0 - original.a);
     result.a = original.a + shadow.a * (1.0 - original.a);
-
-    // Premultiply alpha for correct blending
     if (result.a > 0.0) {
         result.rgb /= result.a;
     }
-
     result.rgb *= result.a;
-
     return result;
 }
 
-technique Draw
+float4 PSVerticalComposite(VertInOut v_in) : TARGET
+{
+    float4 original = image.Sample(defaultSampler, v_in.uv);
+    float2 shadow_uv = v_in.uv - float2(0.0, shadow_offset.y * texel_size.y);
+    int radius = (int)ceil(blur_radius);
+    float shadow_alpha = 0.0;
+
+    for (int y = -radius; y <= radius; y++) {
+        float2 offset = float2(0.0, (float)y * texel_size.y);
+        shadow_alpha += blurred_image.Sample(defaultSampler, shadow_uv + offset).a;
+    }
+    shadow_alpha /= (float)(2 * radius + 1);
+
+    return CompositeShadow(original, shadow_alpha);
+}
+
+technique Horizontal
 {
     pass
     {
         vertex_shader = VSDefault(v_in);
-        pixel_shader  = PSDropShadow(v_in);
+        pixel_shader  = PSHorizontal(v_in);
+    }
+}
+
+technique VerticalComposite
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader  = PSVerticalComposite(v_in);
     }
 }
