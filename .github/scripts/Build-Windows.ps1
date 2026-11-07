@@ -3,7 +3,8 @@ param(
     [ValidateSet('x64')]
     [string] $Target = 'x64',
     [ValidateSet('Debug', 'RelWithDebInfo', 'Release', 'MinSizeRel')]
-    [string] $Configuration = 'RelWithDebInfo'
+    [string] $Configuration = 'RelWithDebInfo',
+    [switch] $EnableInstallProbe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,7 +48,10 @@ function Build {
     Push-Location -Stack BuildTemp
     Ensure-Location $ProjectRoot
 
-    $CmakeArgs = @('--preset', "windows-ci-${Target}")
+    $CmakeArgs = @('--preset', "windows-ci-${Target}", '-DENABLE_POST_BUILD_INSTALL=OFF')
+    if ( $EnableInstallProbe ) {
+        $CmakeArgs += '-DENABLE_INSTALL_PROBE=ON'
+    }
     $CmakeBuildArgs = @('--build')
     $CmakeInstallArgs = @()
 

@@ -194,3 +194,19 @@ if(WIN32)
         "PATH=path_list_prepend:${CMAKE_CURRENT_SOURCE_DIR}/.deps/bin/64bit;PATH=path_list_prepend:${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-deps-2025-07-11-x64/bin"
   )
 endif()
+
+option(ENABLE_INSTALL_PROBE "Build the normal-install frontend verification module" OFF)
+if(WIN32 AND ENABLE_INSTALL_PROBE)
+  find_package(obs-frontend-api REQUIRED)
+  find_package(Qt6 REQUIRED COMPONENTS Widgets)
+  add_library(drop-shadow-install-probe MODULE tests/install-probe.cpp)
+  target_compile_features(drop-shadow-install-probe PRIVATE cxx_std_17)
+  target_link_libraries(drop-shadow-install-probe PRIVATE OBS::libobs OBS::obs-frontend-api Qt6::Widgets)
+  set_target_properties(
+    drop-shadow-install-probe
+    PROPERTIES
+      PREFIX ""
+      LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/install-probe"
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/install-probe"
+  )
+endif()

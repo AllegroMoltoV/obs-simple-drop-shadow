@@ -1,0 +1,44 @@
+name: Verify OBS 33 normal installation
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'src/**'
+      - 'data/**'
+      - 'tests/**'
+      - '.github/scripts/**'
+      - '.github/workflows/verify-obs-install.yaml'
+      - 'buildspec.json'
+      - 'CMakePresets.json'
+permissions:
+  contents: read
+jobs:
+  windows-install:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Build product and opt-in probe
+        run: .github/scripts/Build-Windows.ps1 -Target x64 -Configuration RelWithDebInfo -EnableInstallProbe
+      - name: Package distribution
+        run: .github/scripts/Package-Windows.ps1 -Target x64 -Configuration RelWithDebInfo
+      - name: Verify fresh installation and legacy upgrade
+        run: .github/scripts/Test-ObsLoad-Windows.ps1 -Configuration RelWithDebInfo
+      - name: Upload installation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs33-windows-install-evidence
+          path: |
+            .deps/obs-load-windows/results
+            release/*-windows-x64.zip
+          include-hidden-files: true
+          if-no-files-found: warn
