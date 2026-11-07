@@ -19,3 +19,4 @@
 - [ロゴ](images/logo.svg): 「影」の字に影を付けたSVGです。字形をパスで定義しているため、表示環境のフォントに依存しません。
 
 - [掲載用ロゴ](images/logo.png): SVGから書き出した512×512ピクセルのPNGです。
+- [2026-11-07 OBS 33のWindows配置移行](reports/2026-11-07-obs33-install-layout.md)

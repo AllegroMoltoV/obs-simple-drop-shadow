@@ -18,9 +18,45 @@ A simple drop shadow filter plugin for OBS Studio.
 
 ### Windows
 
-1. [Releases](../../releases) から最新の zip ファイルをダウンロード
-2. zip を展開し、`simple-drop-shadow` フォルダを `%PROGRAMDATA%\obs-studio\plugins\` にコピー
-3. OBS Studio を再起動
+v0.1.2以降のWindows版はOBS Studio 33以降向けです。OBS Studio 33.0.1で新規導入と旧版からの更新、設定保持、影の描画を確認しています。OBS Studio 32以前を使用する場合は、[v0.1.1の配布ページ](https://github.com/AllegroMoltoV/obs-simple-drop-shadow/releases/tag/v0.1.1)から入手してください。旧版のすべてのOBSバージョンでの動作を保証するものではありません。
+
+#### 通常版OBSへの新規導入
+
+プラグインをOBS Studioの共通プラグインフォルダーへ配置します。
+
+1. OBS Studioを終了してください。
+2. [Releases](../../releases)からWindows用のzipファイルをダウンロードし、展開してください。
+3. エクスプローラーのアドレスバーへ`%PROGRAMDATA%`を入力し、Enterキーを押してください。隠しフォルダーの表示設定を変更する必要はありません。
+4. `obs-studio`フォルダーを開き、その中の`plugins`フォルダーを開いてください。存在しないフォルダーを順に作成してください。
+5. 展開した`simple-drop-shadow`フォルダーを`plugins`へコピーしてください。管理者の許可を求められた場合は許可してください。
+6. OBS Studioを起動し、映像ソースのエフェクトフィルターへドロップシャドウを追加してください。
+
+導入後の構成を次に示します。`simple-drop-shadow`フォルダーを二重に作らないでください。PDBファイルが同梱されている場合も、製品フォルダーごとコピーします。
+
+```text
+%PROGRAMDATA%\obs-studio\plugins\
+└─ simple-drop-shadow\
+   ├─ simple-drop-shadow.dll
+   └─ data\
+      ├─ effects\drop-shadow.effect
+      └─ locale\
+         ├─ en-US.ini
+         └─ ja-JP.ini
+```
+
+#### 旧版からの更新
+
+OBS Studioを終了し、新規導入と同じ手順で`simple-drop-shadow`フォルダーを上書きコピーしてください。既存のフィルター設定を保持するため、OBS Studioの設定やシーンを削除しないでください。他のプラグインも削除しないでください。
+
+v0.1.1の`simple-drop-shadow\bin\64bit`が残っていても、新配置のDLLが読み込まれます。
+
+OBS Studioのインストール先へ手動配置した場合は、旧版zipの内容と照合し、この製品の`obs-plugins\64bit\simple-drop-shadow.dll`と`data\obs-plugins\simple-drop-shadow`をOBS Studioの外へバックアップして移してから、新配置へ導入してください。同梱のPDBを手動配置していた場合も同様に移します。OBS Studio本体のファイルや`obs-plugins`フォルダー全体を削除しないでください。
+
+#### ポータブル版OBS
+
+ポータブル版では、OBS Studioのルートフォルダーにある`plugins`へ製品フォルダーをコピーします。通常版の`%PROGRAMDATA%`への導入では読み込まれません。
+
+OBS Studioを終了し、`bin`や`data`と同じ階層に`plugins`フォルダーを作成してください。展開した製品フォルダーをコピーし、`plugins\simple-drop-shadow\simple-drop-shadow.dll`と`plugins\simple-drop-shadow\data`を配置してからOBS Studioを起動します。
 
 ### macOS / Linux
 
@@ -58,7 +94,7 @@ A simple drop shadow filter plugin for OBS Studio.
 
 ```bash
 # Windows
-cmake --preset windows-x64
+cmake --preset windows-x64 -DENABLE_POST_BUILD_INSTALL=OFF
 cmake --build build_x64 --config RelWithDebInfo
 
 # macOS
@@ -70,7 +106,7 @@ cmake --preset ubuntu-x86_64
 cmake --build build_x86_64 --config RelWithDebInfo
 ```
 
-ローカル開発時は `CMakeUserPresets.json` で `CMAKE_INSTALL_PREFIX` を設定すると、ビルド後に自動インストールされます。
+Windowsで生成物を取り出すには、`cmake --install build_x64 --config RelWithDebInfo --prefix release/RelWithDebInfo`を実行してください。生成した製品フォルダーを前述の手順で導入してください。
 
 ## AI利用開示 / AI Disclosure
 
