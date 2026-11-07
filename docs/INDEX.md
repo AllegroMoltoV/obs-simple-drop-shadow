@@ -6,6 +6,7 @@
 
 - [初回セットアップと issue #1 の現状](reports/2026-09-19-initial-setup.md)
 - [issue #1: 分離型ボックスブラーの実装と検証](reports/2026-09-19-issue-1-implementation.md)
+- [OBS Forum の AI 利用開示要件](reports/2026-09-22-obs-forum-ai-disclosure.md)
 
 ## logs
 
