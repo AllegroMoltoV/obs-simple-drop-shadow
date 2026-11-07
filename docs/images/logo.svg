@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Simple Drop Shadow</title>
+  <desc id="description">The kanji for shadow casts a black offset shadow on a gray background.</desc>
+  <defs>
+    <!-- Custom geometric drawing of 影; no external font is required. -->
+    <path id="kage" stroke-width="12" stroke-linejoin="miter" fill-rule="evenodd" d="
+      M 104,72 H 282 V 184 H 104 Z
+      M 136,94 V 120 H 250 V 94 Z
+      M 136,136 V 162 H 250 V 136 Z
+      M 178,194 H 208 V 212 H 294 V 240 H 92 V 212 H 178 Z
+      M 116,252 H 270 V 324 H 116 Z
+      M 146,276 V 300 H 240 V 276 Z
+      M 178,324 H 208 V 412 H 158 V 384 H 178 Z
+      M 126,334 L 152,348 L 116,398 L 90,380 Z
+      M 236,334 L 274,380 L 250,399 L 212,350 Z
+      M 389,74.804 L 413,118.804 Q 375,145.804 327,162.804 L 303,118.804 Q 351,101.804 389,74.804 Z
+      M 395,186 L 419,230 Q 378,258 328,276 L 304,232 Q 354,214 395,186 Z
+      M 415,282.347 L 445,340.347 Q 391,381.347 321,410.347 L 291,352.347 Q 361,323.347 415,282.347 Z
+    "/>
+  </defs>
+  <rect width="512" height="512" rx="72" fill="#9E9E9E"/>
+  <g transform="translate(-14.001 2)">
+    <use href="#kage" transform="translate(22 24)" fill="#000000" stroke="#000000"/>
+    <use href="#kage" fill="#FFFCF2" stroke="#FFFCF2"/>
+  </g>
+</svg>
