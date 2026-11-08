@@ -63,6 +63,19 @@ build_x64/RelWithDebInfo/drop-shadow-filter-benchmark.exe \
 - 公開中の 0.1.2 のエフェクトも、OpenGL で Horizontal と VerticalComposite のコンパイルに失敗しました
 - キャストをコンストラクタ形式に直した試作では、OpenGL と D3D11 の profile の結果が半径 0・3・20・128・372 ですべて一致しました
 
+### macOS と Linux の OpenGL
+
+`.github/workflows/render-test.yaml` で、profile モードを GitHub Actions の Ubuntu と macOS で実行しました。profile モードは、影が描かれない場合、σ / 半径が 0.25 から 0.42 を外れた場合、裾が半径の外に出た場合に終了コード 1 を返します。C 形式のキャストに戻したエフェクトでは、Windows の OpenGL で終了コード 1 になることを確認しました。
+
+run 42479878741 では、両方の OS で全半径が合格しました。
+
+| 半径 | 0 | 3 | 20 | 128 | 372 |
+| --- | --- | --- | --- | --- | --- |
+| Ubuntu 24.04、Mesa llvmpipe、OpenGL 4.5 の σ | 0 | 1.0 | 6.5 | 43.0 | 123.0 |
+| macOS 15、Apple Software Renderer、OpenGL 4.1 の σ | 0 | 1.0 | 7.0 | 43.0 | 124.0 |
+
+macOS では、実行時に `DYLD_FRAMEWORK_PATH` へ `.deps/Frameworks` を、`DYLD_LIBRARY_PATH` へ obs-deps の lib を渡す必要がありました。
+
 ### 既存のテスト
 
 試作に対して既存の CTest 11 件を流すと、radius-zero 以外の 10 件が失敗しました。いずれも、出力を 5x5 に固定した読み取りか、ボックスの形を前提にした期待値を持つテストです。
@@ -72,6 +85,7 @@ build_x64/RelWithDebInfo/drop-shadow-filter-benchmark.exe \
 - 半径 1024 で 0.851ms となり、目標の 1ms 以下を満たしたと考えています。負荷の大部分は、元の解像度で行うマスク・合成・最初の縮小と最後の拡大だと推測します
 - σ を半径の 1/3 にすると、影の裾がほぼ半径の位置で 0 になります。現行のボックスでも影の届く距離は半径と同じなので、半径の意味は変わらないと考えています。ただし、同じ半径でも影の中心付近の柔らかさは変わります
 - 段の中間は、分散が足し算になる性質を使い、最も小さい段に残差のガウシアンを掛けて作りました。σ が半径に対して連続に変わり、サンプル距離の倍率より素直だと考えています
-- C 形式のキャストは HLSL では通るため、D3D11 だけの検証では見つかりませんでした。OpenGL での検証を CTest に入れる必要があると考えています
+- C 形式のキャストは HLSL では通るため、D3D11 だけの検証では見つかりませんでした。OpenGL での検証を CTest と CI に入れる必要があると考えています
+- macOS と Linux の結果はソフトウェア描画によるものです。実際の GPU と、macOS の OBS 32 以降で試験的に選べる Metal 描画は確かめていません
 
 生ログは `.logs/2026110802` から `.logs/2026110813` にあります。
