@@ -95,8 +95,12 @@ jobs:
           bench=$(find "$PWD/build_macos" -name 'drop-shadow-filter-benchmark' -type f -perm -u+x -print -quit)
           gl=$(find "$PWD/.deps/obs-studio-31.1.1/build_universal" \( -name 'libobs-opengl.dylib' -o -name 'libobs-opengl.so' \) -print -quit)
           print "plugin=${plugin} bench=${bench} gl=${gl}"
-          # 実行ファイルと libobs-opengl は @rpath の libobs.framework を参照する。ビルド時の framework は .deps/Frameworks にある
+          # 実行ファイルと libobs-opengl は @rpath の libobs.framework を参照する。ビルド時の framework は .deps/Frameworks、
+          # libobs が参照する FFmpeg などの dylib は .deps の obs-deps にある
+          deps_lib=$(dirname "$(find "$PWD/.deps" -name 'libavcodec.dylib' -print -quit)")
+          print "deps_lib=${deps_lib}"
           export DYLD_FRAMEWORK_PATH="$PWD/.deps/Frameworks"
+          export DYLD_LIBRARY_PATH="${deps_lib}"
           "${bench}" "${plugin}" "$PWD/data" "${gl}" "$PWD/.deps/obs-studio-31.1.1/libobs/data" \
             profile 0 3 20 128 372 2>&1 | tee render-profile-macos.log
 
