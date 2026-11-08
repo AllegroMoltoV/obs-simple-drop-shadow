@@ -19,7 +19,7 @@ constexpr const char *current_filter_name = "Simple Drop Shadow";
 
 // 32x32 のソースの (10, 10) にある赤い 1 画素に、オフセット 0・半径 1 の影を付けた出力を検査する。
 // v0.1.1 は出力がソースと同じ大きさで、影は 3x3 のボックス (アルファ 28)。
-// 0.2.0 以降は出力の四辺に 1 画素の余白が付き、影は σ = 1/3 のガウシアンで、上下左右の 4 画素だけに薄く出る
+// 1.0.0 以降は出力の四辺に 1 画素の余白が付き、影は σ = 1/3 のガウシアンで、上下左右の 4 画素だけに薄く出る
 int check_pixels(obs_source_t *source, bool legacy)
 {
 	fixture::Image image;

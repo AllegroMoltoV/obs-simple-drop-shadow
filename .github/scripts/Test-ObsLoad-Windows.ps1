@@ -151,7 +151,7 @@ try {
             $ObservedResource = $Result.evidence.$Resource
             if (!$ObservedResource -or [IO.Path]::GetFullPath($ObservedResource, $BinaryDir) -ne $ExpectedResource) { throw "Unexpected product resource: $Resource" }
         }
-        # v0.1.1 の表示名は Drop Shadow、0.2.0 以降は Simple Drop Shadow
+        # v0.1.1 の表示名は Drop Shadow、1.0.0 以降は Simple Drop Shadow
         $ExpectedName = if ($Stage -eq 'old-setup') { 'Drop Shadow' } else { 'Simple Drop Shadow' }
         if ($Result.evidence.pixel_result -ne 0 -or $Result.evidence.filter_name -ne $ExpectedName) { throw 'Pixel or locale verification failed.' }
         $SavedScene = Get-Content -LiteralPath (Join-Path $SceneDir 'Baseline.json') -Raw | ConvertFrom-Json
