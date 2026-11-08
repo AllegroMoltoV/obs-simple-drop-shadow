@@ -19,7 +19,7 @@ on:
 permissions:
   contents: read
 env:
-  SCENARIOS: hard-shadow negative-offset color-opacity blur-small blur-large blur-max settings-update
+  SCENARIOS: hard-shadow negative-offset color-opacity blur-small blur-large blur-max settings-update scene-compensation
   PROFILE_RADII: 0 3 20 128 372
 jobs:
   ubuntu-render:

@@ -3,6 +3,8 @@
 #include <graphics/effect.h>
 #include <graphics/vec2.h>
 
+#include "item-compensation.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -28,25 +30,6 @@ constexpr float kKawaseVarianceScale = 0.87f;
 float kawase_variance(int levels)
 {
 	return kKawaseVarianceScale * (std::ldexp(1.0f, 2 * levels) - 1.0f);
-}
-
-struct Margins {
-	int left = 0;
-	int right = 0;
-	int top = 0;
-	int bottom = 0;
-};
-
-// 影がソースの外へはみ出す分だけ、辺ごとに余白を取る
-Margins compute_margins(float radius, float offset_x, float offset_y)
-{
-	const float r = std::ceil(radius);
-	Margins m;
-	m.left = static_cast<int>(std::ceil(std::max(0.0f, r - offset_x)));
-	m.right = static_cast<int>(std::ceil(std::max(0.0f, r + offset_x)));
-	m.top = static_cast<int>(std::ceil(std::max(0.0f, r - offset_y)));
-	m.bottom = static_cast<int>(std::ceil(std::max(0.0f, r + offset_y)));
-	return m;
 }
 
 } // namespace
@@ -118,6 +101,20 @@ public:
 
 		const std::uint32_t rgba = static_cast<std::uint32_t>(obs_data_get_int(settings, "color"));
 		vec4_from_rgba(&shadow_color_, rgba);
+
+		// 余白が変わると出力の大きさが変わり、シーン上の元画像が動く。設定の変更 (生成時を除く) で余白が変わったときは、
+		// アイテムの位置を補正して元画像の位置と大きさを保つ。update は描画スレッドで描画の前に呼ばれるため、
+		// 出力の大きさと位置は同じフレームで変わる
+		// グループの外のアイテムは、位置を設定した時点で OBS が出力の大きさから変換を計算し直す。
+		// 新しい余白を出力の大きさへ反映してから補正する
+		const ShadowMargins before = margins_;
+		const ShadowMargins after = compute_shadow_margins(blur_radius_, offset_x_, offset_y_);
+		margins_ = after;
+		if (margins_initialized_ && after != before) {
+			compensate_scene_items(obs_filter_get_parent(context_), TargetWidth(), TargetHeight(), before,
+					       after);
+		}
+		margins_initialized_ = true;
 	}
 
 	uint32_t Width()
@@ -126,8 +123,7 @@ public:
 		if (base == 0) {
 			return 0;
 		}
-		const Margins m = compute_margins(blur_radius_, offset_x_, offset_y_);
-		return base + static_cast<uint32_t>(m.left + m.right);
+		return base + static_cast<uint32_t>(margins_.left + margins_.right);
 	}
 
 	uint32_t Height()
@@ -136,8 +132,7 @@ public:
 		if (base == 0) {
 			return 0;
 		}
-		const Margins m = compute_margins(blur_radius_, offset_x_, offset_y_);
-		return base + static_cast<uint32_t>(m.top + m.bottom);
+		return base + static_cast<uint32_t>(margins_.top + margins_.bottom);
 	}
 
 	void Render()
@@ -159,7 +154,7 @@ public:
 			return;
 		}
 
-		const Margins m = compute_margins(blur_radius_, offset_x_, offset_y_);
+		const ShadowMargins m = margins_;
 		const uint32_t canvas_w = width + static_cast<uint32_t>(m.left + m.right);
 		const uint32_t canvas_h = height + static_cast<uint32_t>(m.top + m.bottom);
 
@@ -423,6 +418,9 @@ private:
 	float offset_y_ = 4.0f;
 	float blur_radius_ = 4.0f;
 	float opacity_ = 0.6f;
+	// 出力に反映している余白。設定の変更で余白が変わったかを判定し、アイテムの位置の補正に使う
+	ShadowMargins margins_;
+	bool margins_initialized_ = false;
 	struct vec4 shadow_color_ = {};
 };
 

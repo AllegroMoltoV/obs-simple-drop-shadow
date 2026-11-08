@@ -113,6 +113,7 @@ if(WIN32)
     blur-large
     blur-max
     settings-update
+    scene-compensation
   )
   foreach(_backend IN ITEMS d3d11 opengl)
     foreach(_scenario IN LISTS _scenarios)
