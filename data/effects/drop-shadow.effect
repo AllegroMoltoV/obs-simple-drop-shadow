@@ -1,17 +1,26 @@
 // Drop Shadow Effect for OBS Studio
-// Simple drop shadow with offset, blur, color, and opacity
+// 影のマスクを作り、Dual Kawase (縮小と拡大の繰り返し) か分離型ガウシアンでぼかし、元画像と合成する。
+// 座標はすべて出力 (キャンバス) の画素で扱い、元画像はキャンバスの canvas_origin に置く。
 
 uniform float4x4 ViewProj;
 uniform texture2d image;
-uniform texture2d blurred_image;
+uniform texture2d mask_image;
 
-uniform float2 shadow_offset;
-uniform float blur_radius;
+// Mask / Composite で使う。キャンバス上の元画像と影の位置
+uniform float2 canvas_size;
+uniform float2 source_size;
+uniform float2 canvas_origin;
+uniform float2 shadow_origin;
+
+// Down / Up / Gauss で使う。Down は出力、Up と Gauss は入力のテクスチャの 1 画素の UV 幅
+uniform float2 texel_size;
+uniform float gauss_sigma;
+uniform int gauss_taps;
+
 uniform float4 shadow_color;
 uniform float shadow_opacity;
-uniform float2 texel_size;
 
-sampler_state defaultSampler {
+sampler_state linearClamp {
     Filter   = Linear;
     AddressU = Clamp;
     AddressV = Clamp;
@@ -30,63 +39,131 @@ VertInOut VSDefault(VertInOut v_in)
     return v_out;
 }
 
-float4 PSHorizontal(VertInOut v_in) : TARGET
+// 元画像の外側を透明として読む。境界の 1 画素は線形補間と同じ割合で薄める。
+// 補間された UV にキャンバスの大きさを掛けた位置は、描画器によっては画素中心から僅かにずれる。
+// 大きなキャンバスでは縁の被覆率が 1 を下回るため、画素中心へ丸めてから使う
+float4 SampleSource(float2 canvas_px, float2 origin)
 {
-    int radius = (int)ceil(blur_radius);
-    float alpha = 0.0;
-    float2 shadow_uv = v_in.uv - float2(shadow_offset.x * texel_size.x, 0.0);
-
-    for (int x = -radius; x <= radius; x++) {
-        float2 offset = float2((float)x * texel_size.x, 0.0);
-        alpha += image.Sample(defaultSampler, shadow_uv + offset).a;
-    }
-
-    return float4(0.0, 0.0, 0.0, alpha / (float)(2 * radius + 1));
+    float2 px = floor(canvas_px) + 0.5 - origin;
+    float2 coverage = saturate(px + 0.5) * saturate(source_size - px + 0.5);
+    float4 color = image.Sample(linearClamp, px / source_size);
+    return color * (coverage.x * coverage.y);
 }
 
-float4 CompositeShadow(float4 original, float shadow_alpha)
+float4 PSMask(VertInOut v_in) : TARGET
 {
-    float4 shadow = float4(shadow_color.rgb, shadow_alpha * shadow_opacity * shadow_color.a);
-    float4 result;
-    result.rgb = original.rgb * original.a + shadow.rgb * shadow.a * (1.0 - original.a);
-    result.a = original.a + shadow.a * (1.0 - original.a);
-    if (result.a > 0.0) {
-        result.rgb /= result.a;
-    }
-    result.rgb *= result.a;
-    return result;
+    float a = SampleSource(v_in.uv * canvas_size, shadow_origin).a;
+    return float4(a, a, a, a);
 }
 
-float4 PSVerticalComposite(VertInOut v_in) : TARGET
+// Bjørge (SIGGRAPH 2015) の縮小フィルター。中心 4 倍と斜め 4 点の合計 8 で割る
+float4 PSDown(VertInOut v_in) : TARGET
 {
-    float4 original = image.Sample(defaultSampler, v_in.uv);
-    float2 shadow_uv = v_in.uv - float2(0.0, shadow_offset.y * texel_size.y);
-    int radius = (int)ceil(blur_radius);
-    float shadow_alpha = 0.0;
-
-    for (int y = -radius; y <= radius; y++) {
-        float2 offset = float2(0.0, (float)y * texel_size.y);
-        shadow_alpha += blurred_image.Sample(defaultSampler, shadow_uv + offset).a;
-    }
-    shadow_alpha /= (float)(2 * radius + 1);
-
-    return CompositeShadow(original, shadow_alpha);
+    float2 hp = texel_size * 0.5;
+    float sum = mask_image.Sample(linearClamp, v_in.uv).r * 4.0;
+    sum += mask_image.Sample(linearClamp, v_in.uv - hp).r;
+    sum += mask_image.Sample(linearClamp, v_in.uv + hp).r;
+    sum += mask_image.Sample(linearClamp, v_in.uv + float2(hp.x, -hp.y)).r;
+    sum += mask_image.Sample(linearClamp, v_in.uv - float2(hp.x, -hp.y)).r;
+    float a = sum / 8.0;
+    return float4(a, a, a, a);
 }
 
-technique Horizontal
+// Bjørge (SIGGRAPH 2015) の拡大フィルター。8 点を重み 1 と 2 で合計 12 で割る
+float4 PSUp(VertInOut v_in) : TARGET
+{
+    float2 hp = texel_size * 0.5;
+    float sum = mask_image.Sample(linearClamp, v_in.uv + float2(-hp.x * 2.0, 0.0)).r;
+    sum += mask_image.Sample(linearClamp, v_in.uv + float2(-hp.x, hp.y)).r * 2.0;
+    sum += mask_image.Sample(linearClamp, v_in.uv + float2(0.0, hp.y * 2.0)).r;
+    sum += mask_image.Sample(linearClamp, v_in.uv + float2(hp.x, hp.y)).r * 2.0;
+    sum += mask_image.Sample(linearClamp, v_in.uv + float2(hp.x * 2.0, 0.0)).r;
+    sum += mask_image.Sample(linearClamp, v_in.uv + float2(hp.x, -hp.y)).r * 2.0;
+    sum += mask_image.Sample(linearClamp, v_in.uv + float2(0.0, -hp.y * 2.0)).r;
+    sum += mask_image.Sample(linearClamp, v_in.uv + float2(-hp.x, -hp.y)).r * 2.0;
+    float a = sum / 12.0;
+    return float4(a, a, a, a);
+}
+
+// 分離型ガウシアン。texel_size の片方を 0 にして方向を決める。
+// σ が 1 画素より十分小さいと離散化したガウシアンの分散が σ² を大きく下回るため、
+// σ < 0.8 では分散がちょうど σ² になる 3 タップ [w, 1 - 2w, w] (w = σ² / 2) を使う。
+// GLSL は C 形式のキャストを許さないため、型変換はコンストラクタ形式で書く
+float4 PSGauss(VertInOut v_in) : TARGET
+{
+    float center = mask_image.Sample(linearClamp, v_in.uv).r;
+    if (gauss_sigma < 0.8) {
+        float w = 0.5 * gauss_sigma * gauss_sigma;
+        float side = mask_image.Sample(linearClamp, v_in.uv + texel_size).r +
+                     mask_image.Sample(linearClamp, v_in.uv - texel_size).r;
+        float t = center * (1.0 - 2.0 * w) + side * w;
+        return float4(t, t, t, t);
+    }
+    float sum = center;
+    float weight_sum = 1.0;
+    float inv = 1.0 / (2.0 * gauss_sigma * gauss_sigma);
+    for (int i = 1; i <= gauss_taps; i++) {
+        float d = float(i);
+        float w = exp(-d * d * inv);
+        float2 offset = texel_size * d;
+        sum += (mask_image.Sample(linearClamp, v_in.uv + offset).r +
+                mask_image.Sample(linearClamp, v_in.uv - offset).r) * w;
+        weight_sum += 2.0 * w;
+    }
+    float a = sum / weight_sum;
+    return float4(a, a, a, a);
+}
+
+float4 PSComposite(VertInOut v_in) : TARGET
+{
+    float4 original = SampleSource(v_in.uv * canvas_size, canvas_origin);
+    float shadow_alpha = mask_image.Sample(linearClamp, v_in.uv).r * shadow_opacity * shadow_color.a;
+    float3 rgb = original.rgb * original.a + shadow_color.rgb * shadow_alpha * (1.0 - original.a);
+    float a = original.a + shadow_alpha * (1.0 - original.a);
+    return float4(rgb, a);
+}
+
+technique Mask
 {
     pass
     {
         vertex_shader = VSDefault(v_in);
-        pixel_shader  = PSHorizontal(v_in);
+        pixel_shader  = PSMask(v_in);
     }
 }
 
-technique VerticalComposite
+technique Down
 {
     pass
     {
         vertex_shader = VSDefault(v_in);
-        pixel_shader  = PSVerticalComposite(v_in);
+        pixel_shader  = PSDown(v_in);
+    }
+}
+
+technique Up
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader  = PSUp(v_in);
+    }
+}
+
+technique Gauss
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader  = PSGauss(v_in);
+    }
+}
+
+technique Composite
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader  = PSComposite(v_in);
     }
 }

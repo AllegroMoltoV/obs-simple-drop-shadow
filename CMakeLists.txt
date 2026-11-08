@@ -75,124 +75,63 @@ if(WIN32 AND ENABLE_POST_BUILD_INSTALL)
   )
 endif()
 
+# 描画のテスト用の実行ファイル。Windows では常にビルドし、macOS と Linux では CI の描画検証 (render-test.yaml) で有効にする
+# - drop-shadow-filter-integration-test: 影フィルタの出力画素を検査する統合テスト
+# - drop-shadow-filter-benchmark: GPU 時間とぼけ幅を測る。環境で値が変わるため CTest には登録しない
+option(ENABLE_RENDER_TESTS "Build the shadow render tests and benchmark on macOS and Linux" OFF)
+if(WIN32 OR ENABLE_RENDER_TESTS)
+  foreach(_test_target IN ITEMS drop-shadow-filter-integration-test drop-shadow-filter-benchmark)
+    if(_test_target STREQUAL "drop-shadow-filter-integration-test")
+      add_executable(${_test_target} tests/filter-integration-test.cpp)
+    else()
+      add_executable(${_test_target} tests/filter-benchmark.cpp)
+    endif()
+    target_compile_features(${_test_target} PRIVATE cxx_std_17)
+    target_link_libraries(${_test_target} PRIVATE OBS::libobs)
+    add_dependencies(${_test_target} ${CMAKE_PROJECT_NAME})
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+      find_package(X11 REQUIRED)
+      target_link_libraries(${_test_target} PRIVATE X11::X11)
+    endif()
+  endforeach()
+endif()
+
 if(WIN32)
   enable_testing()
 
-  add_executable(drop-shadow-effect-test tests/effect-render-test.cpp)
-  target_compile_features(drop-shadow-effect-test PRIVATE cxx_std_17)
-  target_link_libraries(drop-shadow-effect-test PRIVATE OBS::libobs)
-
-  add_executable(drop-shadow-filter-integration-test tests/filter-integration-test.cpp)
-  target_compile_features(drop-shadow-filter-integration-test PRIVATE cxx_std_17)
-  target_link_libraries(drop-shadow-filter-integration-test PRIVATE OBS::libobs)
-  add_dependencies(drop-shadow-filter-integration-test ${CMAKE_PROJECT_NAME})
-
-  add_test(
-    NAME drop-shadow-effect-smoke
-    COMMAND
-      drop-shadow-effect-test "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll" smoke
+  # 統合テストを D3D11 と OpenGL の両方で実行する。OpenGL の DLL は OBS のビルドで
+  # cmake --build .deps/obs-studio-31.1.1/build_x64 --config Release --target libobs-opengl を実行して作る
+  set(_obs_build "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64")
+  set(_graphics_d3d11 "${_obs_build}/libobs-d3d11/Release/libobs-d3d11.dll")
+  set(_graphics_opengl "${_obs_build}/libobs-opengl/Release/libobs-opengl.dll")
+  set(
+    _scenarios
+    hard-shadow
+    negative-offset
+    color-opacity
+    blur-small
+    blur-large
+    blur-max
+    settings-update
+    scene-compensation
   )
-  add_test(
-    NAME drop-shadow-horizontal
-    COMMAND
-      drop-shadow-effect-test "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll" horizontal
-  )
-  add_test(
-    NAME drop-shadow-vertical-composite
-    COMMAND
-      drop-shadow-effect-test "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll"
-      vertical-composite
-  )
-  add_test(
-    NAME drop-shadow-filter-integration
-    COMMAND
-      drop-shadow-filter-integration-test "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect" "${CMAKE_CURRENT_BINARY_DIR}/test-module-data-blur"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/libobs/data" blur
-  )
-  add_test(
-    NAME drop-shadow-filter-radius-zero
-    COMMAND
-      drop-shadow-filter-integration-test "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_BINARY_DIR}/test-module-data-radius-zero"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/libobs/data" radius-zero
-  )
-  add_test(
-    NAME drop-shadow-filter-edge-offset
-    COMMAND
-      drop-shadow-filter-integration-test "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_BINARY_DIR}/test-module-data-edge-offset"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/libobs/data" edge-offset
-  )
-  add_test(
-    NAME drop-shadow-filter-vertical-edge-offset
-    COMMAND
-      drop-shadow-filter-integration-test "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_BINARY_DIR}/test-module-data-vertical-edge-offset"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/libobs/data" vertical-edge-offset
-  )
-  add_test(
-    NAME drop-shadow-filter-negative-edge-offset
-    COMMAND
-      drop-shadow-filter-integration-test "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_BINARY_DIR}/test-module-data-negative-edge-offset"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/libobs/data" negative-edge-offset
-  )
-  add_test(
-    NAME drop-shadow-filter-radius-max
-    COMMAND
-      drop-shadow-filter-integration-test "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_BINARY_DIR}/test-module-data-radius-max"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/libobs/data" radius-max
-  )
-  add_test(
-    NAME drop-shadow-filter-settings-update
-    COMMAND
-      drop-shadow-filter-integration-test "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_BINARY_DIR}/test-module-data-settings-update"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/libobs/data" settings-update
-  )
-  add_test(
-    NAME drop-shadow-filter-color-opacity
-    COMMAND
-      drop-shadow-filter-integration-test "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
-      "${CMAKE_CURRENT_SOURCE_DIR}/data/effects/drop-shadow.effect"
-      "${CMAKE_CURRENT_BINARY_DIR}/test-module-data-color-opacity"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/build_x64/libobs-d3d11/Release/libobs-d3d11.dll"
-      "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/libobs/data" color-opacity
-  )
-  set_tests_properties(
-    drop-shadow-effect-smoke
-    drop-shadow-horizontal
-    drop-shadow-vertical-composite
-    drop-shadow-filter-integration
-    drop-shadow-filter-radius-zero
-    drop-shadow-filter-edge-offset
-    drop-shadow-filter-vertical-edge-offset
-    drop-shadow-filter-negative-edge-offset
-    drop-shadow-filter-radius-max
-    drop-shadow-filter-settings-update
-    drop-shadow-filter-color-opacity
-    PROPERTIES
-      ENVIRONMENT_MODIFICATION
-        "PATH=path_list_prepend:${CMAKE_CURRENT_SOURCE_DIR}/.deps/bin/64bit;PATH=path_list_prepend:${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-deps-2025-07-11-x64/bin"
-  )
+  foreach(_backend IN ITEMS d3d11 opengl)
+    foreach(_scenario IN LISTS _scenarios)
+      set(_test_name drop-shadow-${_backend}-${_scenario})
+      add_test(
+        NAME ${_test_name}
+        COMMAND
+          drop-shadow-filter-integration-test "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_SOURCE_DIR}/data"
+          "${_graphics_${_backend}}" "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-studio-31.1.1/libobs/data" ${_scenario}
+      )
+      set_tests_properties(
+        ${_test_name}
+        PROPERTIES
+          ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:${CMAKE_CURRENT_SOURCE_DIR}/.deps/bin/64bit;PATH=path_list_prepend:${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-deps-2025-07-11-x64/bin"
+      )
+    endforeach()
+  endforeach()
 endif()
 
 option(ENABLE_INSTALL_PROBE "Build the normal-install frontend verification module" OFF)
