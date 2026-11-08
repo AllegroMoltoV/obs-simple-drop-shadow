@@ -340,9 +340,10 @@ void check_scene_compensation(Checker &c, obs_source_t *source, obs_source_t *fi
 			 std::string(placed[i].name) + " did not return to its initial crop");
 	}
 
-	// グループを含むシーンを解放するだけで終了すると、補正を行わない場合でも obs_shutdown で
-	// "Double destroy" のエラーとともに異常終了した。グループを先にシーンから取り除く
-	obs_sceneitem_remove(group);
+	// OBS 31 以降はキャンバスがシーンを保持するため、参照を手放すだけではシーンが破棄されず、プラグインの
+	// アンロード後に破棄されてフィルターの後始末が失敗する。シーンをキャンバスから外してから解放する
+	obs_source_remove(obs_scene_get_source(scene2));
+	obs_source_remove(obs_scene_get_source(scene1));
 	obs_scene_release(scene2);
 	obs_scene_release(scene1);
 }
