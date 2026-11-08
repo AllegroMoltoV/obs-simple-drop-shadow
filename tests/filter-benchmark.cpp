@@ -236,15 +236,21 @@ int main(int argc, char **argv)
 		std::cerr << "failed to start OBS\n";
 		return 2;
 	}
+	// obs_add_data_path は非推奨だが、フロントエンドなしで libobs の既定エフェクトを読ませる手段がほかにない
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4996)
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 	std::string core_data_path = argv[4];
 	core_data_path += '/';
 	obs_add_data_path(core_data_path.c_str());
 #ifdef _MSC_VER
 #pragma warning(pop)
+#else
+#pragma GCC diagnostic pop
 #endif
 	obs_video_info video = {};
 	video.graphics_module = argv[3];
