@@ -110,7 +110,7 @@ public:
 		// 新しい余白を出力の大きさへ反映してから補正する
 		std::lock_guard<std::mutex> lock(state_mutex_);
 		margins_ = compute_shadow_margins(blur_radius_, offset_x_, offset_y_);
-		ApplyEffectiveMargins("settings changed", obs_filter_get_parent(context_));
+		ApplyEffectiveMargins("settings changed", obs_filter_get_parent(context_), LOG_DEBUG);
 	}
 
 	// フィルターが親に付いたとき。OBS の起動時はシーンのアイテムより先にフィルターが付くため、補正の対象は見つからない
@@ -289,8 +289,9 @@ public:
 
 private:
 	// フィルターが親の出力に効いている (親に付いていて有効) ときは今の余白、効いていないときは 0 を目標とし、
-	// アイテムの位置が合っている余白 (applied_margins_) と違えば補正する。state_mutex_ を取った状態で呼ぶ
-	void ApplyEffectiveMargins(const char *reason, obs_source_t *parent)
+	// アイテムの位置が合っている余白 (applied_margins_) と違えば補正する。state_mutex_ を取った状態で呼ぶ。
+	// スライダーの操作中は設定の変更が 1 秒に数十回届くため、その補正は log_level を LOG_DEBUG にして通常のログに残さない
+	void ApplyEffectiveMargins(const char *reason, obs_source_t *parent, int log_level = LOG_INFO)
 	{
 		const bool active = attached_ && obs_source_enabled(context_);
 		const ShadowMargins target = active ? margins_ : ShadowMargins{};
@@ -299,7 +300,7 @@ private:
 		}
 		const size_t count =
 			compensate_scene_items(parent, TargetWidth(), TargetHeight(), applied_margins_, target);
-		obs_log(LOG_INFO,
+		obs_log(log_level,
 			"[drop_shadow] %s: adjusted %zu scene item(s), margins L%d T%d R%d B%d -> L%d T%d R%d B%d",
 			reason, count, applied_margins_.left, applied_margins_.top, applied_margins_.right,
 			applied_margins_.bottom, target.left, target.top, target.right, target.bottom);
