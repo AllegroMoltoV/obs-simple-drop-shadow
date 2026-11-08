@@ -1,0 +1,107 @@
+name: Render shadow on macOS and Linux
+# macOS と Linux の OpenGL で、影のエフェクトのコンパイルと描画を確かめる。
+# 開発者は macOS と Linux の機材を持たないため、この 2 つの OS の描画はこのワークフローで検証する。
+# drop-shadow-filter-benchmark の profile モードは、影の有無・ぼけ幅・裾の範囲を判定し、外れたら終了コード 1 を返す
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/ui-improvement'
+  pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'src/**'
+      - 'data/**'
+      - 'tests/**'
+      - '.github/workflows/render-test.yaml'
+permissions:
+  contents: read
+jobs:
+  ubuntu-render:
+    name: Render on Ubuntu (Mesa OpenGL)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build plugin
+        uses: ./.github/actions/build-plugin
+        with:
+          target: x86_64
+          config: RelWithDebInfo
+
+      - name: Install render dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libgl1-mesa-dri libegl-mesa0 libx11-dev
+
+      - name: Build render test
+        run: |
+          cmake -S . -B build_x86_64 -DENABLE_RENDER_TESTS=ON
+          cmake --build build_x86_64 --config RelWithDebInfo --target drop-shadow-filter-benchmark
+
+      - name: Render shadow profile
+        run: |
+          set -o pipefail
+          plugin=$(find "$PWD/build_x86_64" -name 'simple-drop-shadow.so' -print -quit)
+          bench=$(find "$PWD/build_x86_64" -name 'drop-shadow-filter-benchmark' -type f -print -quit)
+          gl=$(find /usr/lib -name 'libobs-opengl.so*' -print -quit)
+          echo "plugin=${plugin} bench=${bench} gl=${gl}"
+          xvfb-run -a -s '-screen 0 1280x720x24' "${bench}" "${plugin}" "$PWD/data" "${gl}" /usr/share/obs/libobs \
+            profile 0 3 20 128 372 2>&1 | tee render-profile-ubuntu.log
+
+      - name: Upload render log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-profile-ubuntu
+          path: render-profile-ubuntu.log
+          if-no-files-found: warn
+
+  macos-render:
+    name: Render on macOS (OpenGL)
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: zsh --no-rcs --errexit --pipefail {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_16.1.0.app/Contents/Developer
+
+      - name: Build plugin
+        uses: ./.github/actions/build-plugin
+        with:
+          target: macos-universal
+          config: RelWithDebInfo
+
+      - name: Build render test and OpenGL module
+        run: |
+          cmake -S . -B build_macos -DENABLE_RENDER_TESTS=ON
+          cmake --build build_macos --config RelWithDebInfo --target drop-shadow-filter-benchmark
+          cmake --build .deps/obs-studio-31.1.1/build_universal --config Release --target libobs-opengl
+
+      - name: Render shadow profile
+        run: |
+          plugin=$(find "$PWD/build_macos" -path '*RelWithDebInfo/simple-drop-shadow.plugin/Contents/MacOS/simple-drop-shadow' -print -quit)
+          bench=$(find "$PWD/build_macos" -name 'drop-shadow-filter-benchmark' -type f -perm -u+x -print -quit)
+          gl=$(find "$PWD/.deps/obs-studio-31.1.1/build_universal" \( -name 'libobs-opengl.dylib' -o -name 'libobs-opengl.so' \) -print -quit)
+          print "plugin=${plugin} bench=${bench} gl=${gl}"
+          "${bench}" "${plugin}" "$PWD/data" "${gl}" "$PWD/.deps/obs-studio-31.1.1/libobs/data" \
+            profile 0 3 20 128 372 2>&1 | tee render-profile-macos.log
+
+      - name: Upload render log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-profile-macos
+          path: render-profile-macos.log
+          if-no-files-found: warn

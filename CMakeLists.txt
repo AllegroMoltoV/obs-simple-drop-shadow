@@ -195,6 +195,20 @@ if(WIN32)
   )
 endif()
 
+# 影の GPU 時間とぼけ幅を測る実行ファイル。Windows では常にビルドし、macOS と Linux では CI の描画検証で有効にする。
+# 環境で値が変わるため CTest には登録せず、手動か CI のワークフローから実行する
+option(ENABLE_RENDER_TESTS "Build the shadow benchmark and profile tool on macOS and Linux" OFF)
+if(WIN32 OR ENABLE_RENDER_TESTS)
+  add_executable(drop-shadow-filter-benchmark tests/filter-benchmark.cpp)
+  target_compile_features(drop-shadow-filter-benchmark PRIVATE cxx_std_17)
+  target_link_libraries(drop-shadow-filter-benchmark PRIVATE OBS::libobs)
+  add_dependencies(drop-shadow-filter-benchmark ${CMAKE_PROJECT_NAME})
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(X11 REQUIRED)
+    target_link_libraries(drop-shadow-filter-benchmark PRIVATE X11::X11)
+  endif()
+endif()
+
 option(ENABLE_INSTALL_PROBE "Build the normal-install frontend verification module" OFF)
 if(WIN32 AND ENABLE_INSTALL_PROBE)
   find_package(obs-frontend-api REQUIRED)
