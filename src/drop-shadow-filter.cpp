@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <mutex>
 #include <new>
 
 namespace {
@@ -71,11 +72,13 @@ public:
 
 		obs_leave_graphics();
 
+		signal_handler_connect(obs_source_get_signal_handler(context_), "enable", OnEnable, this);
 		Update(settings);
 	}
 
 	~DropShadowFilter()
 	{
+		signal_handler_disconnect(obs_source_get_signal_handler(context_), "enable", OnEnable, this);
 		obs_enter_graphics();
 		for (auto &level : levels_) {
 			gs_texrender_destroy(level);
@@ -102,19 +105,28 @@ public:
 		const std::uint32_t rgba = static_cast<std::uint32_t>(obs_data_get_int(settings, "color"));
 		vec4_from_rgba(&shadow_color_, rgba);
 
-		// 余白が変わると出力の大きさが変わり、シーン上の元画像が動く。設定の変更 (生成時を除く) で余白が変わったときは、
-		// アイテムの位置を補正して元画像の位置と大きさを保つ。update は描画スレッドで描画の前に呼ばれるため、
-		// 出力の大きさと位置は同じフレームで変わる
-		// グループの外のアイテムは、位置を設定した時点で OBS が出力の大きさから変換を計算し直す。
+		// update は描画スレッドで描画の前に呼ばれるため、出力の大きさと位置は同じフレームで変わる。
+		// グループの外のアイテムは、位置を設定した時点で OBS が出力の大きさから変換を計算し直すため、
 		// 新しい余白を出力の大きさへ反映してから補正する
-		const ShadowMargins before = margins_;
-		const ShadowMargins after = compute_shadow_margins(blur_radius_, offset_x_, offset_y_);
-		margins_ = after;
-		if (margins_initialized_ && after != before) {
-			compensate_scene_items(obs_filter_get_parent(context_), TargetWidth(), TargetHeight(), before,
-					       after);
-		}
-		margins_initialized_ = true;
+		std::lock_guard<std::mutex> lock(state_mutex_);
+		margins_ = compute_shadow_margins(blur_radius_, offset_x_, offset_y_);
+		ApplyEffectiveMargins("settings changed", obs_filter_get_parent(context_));
+	}
+
+	// フィルターが親に付いたとき。OBS の起動時はシーンのアイテムより先にフィルターが付くため、補正の対象は見つからない
+	void Attach(obs_source_t *parent)
+	{
+		std::lock_guard<std::mutex> lock(state_mutex_);
+		attached_ = true;
+		ApplyEffectiveMargins("filter added", parent);
+	}
+
+	// フィルターが親から外れたとき。親の出力はこの時点で既に元の大きさに戻っている
+	void Detach(obs_source_t *parent)
+	{
+		std::lock_guard<std::mutex> lock(state_mutex_);
+		attached_ = false;
+		ApplyEffectiveMargins("filter removed", parent);
 	}
 
 	uint32_t Width()
@@ -251,11 +263,49 @@ public:
 		static_cast<DropShadowFilter *>(data)->Render();
 	}
 
+	static void FilterAdd(void *data, obs_source_t *parent)
+	{
+		static_cast<DropShadowFilter *>(data)->Attach(parent);
+	}
+
+	static void FilterRemove(void *data, obs_source_t *parent)
+	{
+		static_cast<DropShadowFilter *>(data)->Detach(parent);
+	}
+
+	// 目のアイコンなどでフィルターが有効・無効になったとき。OBS は有効の状態を変えてからこの通知を送る
+	static void OnEnable(void *data, calldata_t *cd)
+	{
+		auto *self = static_cast<DropShadowFilter *>(data);
+		const bool enabled = calldata_bool(cd, "enabled");
+		std::lock_guard<std::mutex> lock(self->state_mutex_);
+		self->ApplyEffectiveMargins(enabled ? "filter enabled" : "filter disabled",
+					    obs_filter_get_parent(self->context_));
+	}
+
 	static uint32_t GetWidth(void *data) { return static_cast<DropShadowFilter *>(data)->Width(); }
 
 	static uint32_t GetHeight(void *data) { return static_cast<DropShadowFilter *>(data)->Height(); }
 
 private:
+	// フィルターが親の出力に効いている (親に付いていて有効) ときは今の余白、効いていないときは 0 を目標とし、
+	// アイテムの位置が合っている余白 (applied_margins_) と違えば補正する。state_mutex_ を取った状態で呼ぶ
+	void ApplyEffectiveMargins(const char *reason, obs_source_t *parent)
+	{
+		const bool active = attached_ && obs_source_enabled(context_);
+		const ShadowMargins target = active ? margins_ : ShadowMargins{};
+		if (target == applied_margins_) {
+			return;
+		}
+		const size_t count =
+			compensate_scene_items(parent, TargetWidth(), TargetHeight(), applied_margins_, target);
+		obs_log(LOG_INFO,
+			"[drop_shadow] %s: adjusted %zu scene item(s), margins L%d T%d R%d B%d -> L%d T%d R%d B%d",
+			reason, count, applied_margins_.left, applied_margins_.top, applied_margins_.right,
+			applied_margins_.bottom, target.left, target.top, target.right, target.bottom);
+		applied_margins_ = target;
+	}
+
 	uint32_t TargetWidth() const
 	{
 		obs_source_t *target = obs_filter_get_target(context_);
@@ -418,9 +468,13 @@ private:
 	float offset_y_ = 4.0f;
 	float blur_radius_ = 4.0f;
 	float opacity_ = 0.6f;
-	// 出力に反映している余白。設定の変更で余白が変わったかを判定し、アイテムの位置の補正に使う
+	// margins_ は設定から決まる出力の余白。applied_margins_ はシーンのアイテムの位置が合っている余白で、
+	// フィルターが出力に効いていないときは 0。設定の変更 (描画スレッド) と有効化の通知 (UI スレッド) が
+	// 同時に起きうるため、state_mutex_ で守る
+	std::mutex state_mutex_;
 	ShadowMargins margins_;
-	bool margins_initialized_ = false;
+	ShadowMargins applied_margins_;
+	bool attached_ = false;
 	struct vec4 shadow_color_ = {};
 };
 
@@ -441,6 +495,8 @@ void register_drop_shadow_filter(void)
 	info.video_render = DropShadowFilter::VideoRender;
 	info.get_width = DropShadowFilter::GetWidth;
 	info.get_height = DropShadowFilter::GetHeight;
+	info.filter_add = DropShadowFilter::FilterAdd;
+	info.filter_remove = DropShadowFilter::FilterRemove;
 
 	obs_register_source(&info);
 }

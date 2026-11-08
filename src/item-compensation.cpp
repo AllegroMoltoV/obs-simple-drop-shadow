@@ -246,11 +246,11 @@ bool collect_canvas(void *param, obs_canvas_t *canvas)
 
 } // namespace
 
-void compensate_scene_items(obs_source_t *parent, uint32_t source_width, uint32_t source_height,
-			    const ShadowMargins &before, const ShadowMargins &after)
+size_t compensate_scene_items(obs_source_t *parent, uint32_t source_width, uint32_t source_height,
+			      const ShadowMargins &before, const ShadowMargins &after)
 {
 	if (!parent || source_width == 0 || source_height == 0 || before == after) {
-		return;
+		return 0;
 	}
 	// グループは複数の経路から辿れるため、重複を除いてから 1 回ずつ補正する
 	CollectContext ctx;
@@ -260,4 +260,5 @@ void compensate_scene_items(obs_source_t *parent, uint32_t source_width, uint32_
 		compensate_item(item, source_width, source_height, before, after);
 		obs_sceneitem_release(item);
 	}
+	return ctx.items.size();
 }

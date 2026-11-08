@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -323,6 +324,46 @@ void check_scene_compensation(Checker &c, obs_source_t *source, obs_source_t *fi
 							 " px after " + label);
 		}
 	}
+
+	// フィルターの無効化・有効化・削除・追加でも出力の大きさが変わる。いずれの操作でも元画像は動かない。
+	// 影の設定は余白が左と上にも付くものにして、出力の大きさの変化が元画像の位置に現れるようにする
+	const ShadowSettings wide = {-10.0, 6.0, 30.0, 1.0, 0xff000000};
+	if (!update_and_wait(filter, wide) || !wait_frames(3)) {
+		c.expect(false, "settings were not applied before lifecycle checks");
+	}
+	const ShadowSettings no_shadow = {0.0, 0.0, 0.0, 1.0, 0xff000000};
+	struct LifecycleStep {
+		const char *label;
+		std::function<void()> action;
+		const ShadowSettings *effective;
+	};
+	const LifecycleStep lifecycle[] = {
+		{"disable", [filter] { obs_source_set_enabled(filter, false); }, &no_shadow},
+		{"enable", [filter] { obs_source_set_enabled(filter, true); }, &wide},
+		{"remove", [source, filter] { obs_source_filter_remove(source, filter); }, &no_shadow},
+		{"add again", [source, filter] { obs_source_filter_add(source, filter); }, &wide},
+	};
+	for (const LifecycleStep &step : lifecycle) {
+		step.action();
+		if (!wait_frames(3)) {
+			c.expect(false, std::string("OBS did not advance frames after ") + step.label);
+		}
+		render_scenes({scene1, scene2});
+		for (size_t i = 0; i < placed.size(); ++i) {
+			const SceneCorners now =
+				original_corners(placed[i].item, placed[i].group, *step.effective, width, height);
+			const float error = std::max({std::fabs(now.top_left.x - expected[i].top_left.x),
+						      std::fabs(now.top_left.y - expected[i].top_left.y),
+						      std::fabs(now.bottom_right.x - expected[i].bottom_right.x),
+						      std::fabs(now.bottom_right.y - expected[i].bottom_right.y)});
+			c.expect(error <= 0.26f, std::string(placed[i].name) + " moved by " + std::to_string(error) +
+							 " px after " + step.label);
+		}
+	}
+	if (!update_and_wait(filter, initial) || !wait_frames(3)) {
+		c.expect(false, "settings were not applied after lifecycle checks");
+	}
+	render_scenes({scene1, scene2});
 
 	// 最初の設定に戻すと、位置・バウンディングボックス・クロップも最初の値に戻る
 	for (size_t i = 0; i < placed.size(); ++i) {
