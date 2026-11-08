@@ -10,6 +10,7 @@
 - [2026-11-07 OBS 33のWindows配置移行](reports/2026-11-07-obs33-install-layout.md)
 - [UI 改善要求の現状調査](reports/2026-11-08-ui-improvement-survey.md)
 - [大半径の影を低負荷で描画する方式の比較](reports/2026-11-08-low-cost-blur-method.md)
+- [1.0.0 の公開記録](reports/2026-11-09-release-1.0.0.md)
 
 ## logs
 
