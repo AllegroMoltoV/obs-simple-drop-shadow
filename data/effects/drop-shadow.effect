@@ -39,10 +39,12 @@ VertInOut VSDefault(VertInOut v_in)
     return v_out;
 }
 
-// 元画像の外側を透明として読む。境界の 1 画素は線形補間と同じ割合で薄める
+// 元画像の外側を透明として読む。境界の 1 画素は線形補間と同じ割合で薄める。
+// 補間された UV にキャンバスの大きさを掛けた位置は、描画器によっては画素中心から僅かにずれる。
+// 大きなキャンバスでは縁の被覆率が 1 を下回るため、画素中心へ丸めてから使う
 float4 SampleSource(float2 canvas_px, float2 origin)
 {
-    float2 px = canvas_px - origin;
+    float2 px = floor(canvas_px) + 0.5 - origin;
     float2 coverage = saturate(px + 0.5) * saturate(source_size - px + 0.5);
     float4 color = image.Sample(linearClamp, px / source_size);
     return color * (coverage.x * coverage.y);
