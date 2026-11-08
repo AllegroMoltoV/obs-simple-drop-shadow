@@ -5,11 +5,7 @@
 //   縁のぼけ幅 (平坦部の 84% から 16% までの距離の半分) を σ として出す。
 //   あわせて、影の縁からアルファが 0 になるまでの距離 (extent) を出す。
 
-#include <obs.h>
-#if defined(__linux__)
-#include <obs-nix-platform.h>
-#include <X11/Xlib.h>
-#endif
+#include "obs-test-env.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -222,48 +218,7 @@ int main(int argc, char **argv)
 		return 2;
 	}
 	profile_mode = std::strcmp(argv[5], "profile") == 0;
-#if defined(__linux__)
-	// Linux の OpenGL 描画は X11 のディスプレイと EGL を使う。CI では xvfb のディスプレイを開く
-	Display *display = XOpenDisplay(nullptr);
-	if (!display) {
-		std::cerr << "failed to open X display\n";
-		return 2;
-	}
-	obs_set_nix_platform(OBS_NIX_PLATFORM_X11_EGL);
-	obs_set_nix_platform_display(display);
-#endif
-	if (!obs_startup("en-US", nullptr, nullptr)) {
-		std::cerr << "failed to start OBS\n";
-		return 2;
-	}
-	// obs_add_data_path は非推奨だが、フロントエンドなしで libobs の既定エフェクトを読ませる手段がほかにない
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4996)
-#else
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-	std::string core_data_path = argv[4];
-	core_data_path += '/';
-	obs_add_data_path(core_data_path.c_str());
-#ifdef _MSC_VER
-#pragma warning(pop)
-#else
-#pragma GCC diagnostic pop
-#endif
-	obs_video_info video = {};
-	video.graphics_module = argv[3];
-	video.fps_num = 60;
-	video.fps_den = 1;
-	video.base_width = source_width;
-	video.base_height = source_height;
-	video.output_width = source_width;
-	video.output_height = source_height;
-	video.output_format = VIDEO_FORMAT_RGBA;
-	if (obs_reset_video(&video) != OBS_VIDEO_SUCCESS) {
-		std::cerr << "failed to initialize OBS video\n";
-		obs_shutdown();
+	if (!obs_test::start(argv[3], argv[4], source_width, source_height)) {
 		return 2;
 	}
 
@@ -282,9 +237,7 @@ int main(int argc, char **argv)
 	obs_register_source(&info);
 
 	int exit_code = 0;
-	obs_module_t *module = nullptr;
-	if (obs_open_module(&module, argv[1], argv[2]) != MODULE_SUCCESS || !obs_init_module(module)) {
-		std::cerr << "failed to load plugin module\n";
+	if (!obs_test::load_plugin(argv[1], argv[2])) {
 		obs_shutdown();
 		return 2;
 	}

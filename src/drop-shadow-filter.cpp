@@ -20,12 +20,14 @@ constexpr int kMaxLevels = 12;
 // 最も小さい段の一辺がこれを下回る段数は使わない
 constexpr uint32_t kMinLevelSize = 2;
 
-// Dual Kawase を n 段行ったときの分散 (元の解像度の画素の 2 乗)。
-// 縮小 1 段の分散は入力の画素で 0.75、拡大 1 段は入力の画素で約 0.521 (サンプル位置の分散 1/3 と
-// 線形補間の 0.1875 の和)。段 k の画素は元の 2^k 倍なので、合計は 0.944 * (4^n - 1) になる
+// Dual Kawase を n 段行ったときの分散 (元の解像度の画素の 2 乗) を kKawaseVarianceScale * (4^n - 1) と近似する。
+// 段 k の画素は元の 2^k 倍なので、各段の分散は 4^k に比例して積み上がる。係数は縮小・拡大のサンプル位置から
+// 求めた 0.944 を出発点に、段数が切り替わる半径の前後でぼけ幅が連続するよう実測で合わせた
+constexpr float kKawaseVarianceScale = 0.87f;
+
 float kawase_variance(int levels)
 {
-	return 0.944f * (std::ldexp(1.0f, 2 * levels) - 1.0f);
+	return kKawaseVarianceScale * (std::ldexp(1.0f, 2 * levels) - 1.0f);
 }
 
 struct Margins {

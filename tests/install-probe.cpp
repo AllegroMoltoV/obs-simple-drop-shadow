@@ -14,6 +14,48 @@ QString result_dir;
 QString phase;
 QJsonObject evidence;
 constexpr const char *source_name = "Drop shadow install impulse";
+constexpr const char *legacy_filter_name = "Drop Shadow";
+constexpr const char *current_filter_name = "Simple Drop Shadow";
+
+// 32x32 のソースの (10, 10) にある赤い 1 画素に、オフセット 0・半径 1 の影を付けた出力を検査する。
+// v0.1.1 は出力がソースと同じ大きさで、影は 3x3 のボックス (アルファ 28)。
+// 0.2.0 以降は出力の四辺に 1 画素の余白が付き、影は σ = 1/3 のガウシアンで、上下左右の 4 画素だけに薄く出る
+int check_pixels(obs_source_t *source, bool legacy)
+{
+	fixture::Image image;
+	if (!fixture::render(source, image)) {
+		return 2;
+	}
+	fixture::Checker c;
+	const int size = legacy ? 32 : 34;
+	const int cx = legacy ? 10 : 11;
+	const int cy = cx;
+	c.expect(image.width == static_cast<uint32_t>(size) && image.height == static_cast<uint32_t>(size),
+		 "unexpected output size");
+	if (c.failures) {
+		return 1;
+	}
+	for (int y = 0; y < size; ++y) {
+		for (int x = 0; x < size; ++x) {
+			const int dx = std::abs(x - cx);
+			const int dy = std::abs(y - cy);
+			const int a = image.alpha(x, y);
+			if (dx == 0 && dy == 0) {
+				c.expect(a == 255, "original pixel is not opaque");
+			} else if (dx > 1 || dy > 1) {
+				c.expect(a == 0, "shadow outside the radius");
+			} else if (legacy) {
+				c.expect_near(a, 28, 1, "legacy box shadow");
+			} else if (dx + dy == 1) {
+				c.expect(a >= 8 && a <= 20 && a == image.alpha(cx - (x - cx), cy - (y - cy)),
+					 "gaussian shadow next to the original");
+			} else {
+				c.expect(a <= 3, "gaussian shadow on the diagonal");
+			}
+		}
+	}
+	return c.failures ? 1 : 0;
+}
 
 void finish(bool passed, const QString &reason)
 {
@@ -57,7 +99,8 @@ void inspect()
 	evidence.insert("effect_path", effect ? QString::fromUtf8(effect) : QString());
 	evidence.insert("locale_path", locale ? QString::fromUtf8(locale) : QString());
 	evidence.insert("filter_name", translated);
-	const bool resources = effect && locale && translated == "Drop Shadow";
+	const bool legacy = translated == legacy_filter_name;
+	const bool resources = effect && locale && (legacy || translated == current_filter_name);
 	bfree(effect);
 	bfree(locale);
 	if (!resources) {
@@ -107,9 +150,11 @@ void inspect()
 			      obs_data_get_int(settings, "color") == 0xff000000;
 	evidence.insert("filter_settings", QJsonDocument::fromJson(obs_data_get_json(settings)).object());
 	obs_data_release(settings);
-	const int pixels = retained ? render_and_check(source, Scenario::Blur) : -1;
+	const int pixels = retained ? check_pixels(source, legacy) : -1;
 	evidence.insert("pixel_result", pixels);
-	evidence.insert("scenario", "blur: center alpha 255, surrounding 3x3 alpha 28, exterior alpha 0");
+	evidence.insert("scenario", legacy ? "legacy: 32x32 output, center alpha 255, surrounding 3x3 alpha 28"
+					   : "current: 34x34 output, center alpha 255, 4 neighbours alpha 8-20, "
+					     "diagonals at most 3");
 	obs_source_release(filter);
 	obs_source_release(source);
 	if (retained && pixels == 0)
@@ -130,19 +175,8 @@ bool obs_module_load()
 	phase = qEnvironmentVariable("DROP_SHADOW_INSTALL_PHASE");
 	if (result_dir.isEmpty() || (phase != "setup" && phase != "restore"))
 		return false;
-	obs_source_info info{};
-	info.id = "drop_shadow_test_source";
-	info.type = OBS_SOURCE_TYPE_INPUT;
-	info.output_flags = OBS_SOURCE_VIDEO;
-	info.get_name = [](void *) {
-		return "Drop shadow test source";
-	};
-	info.create = create_source;
-	info.destroy = destroy_source;
-	info.get_width = source_size;
-	info.get_height = source_size;
-	info.video_render = render_source;
-	obs_register_source(&info);
+	fixture::current_spec = {32, 32, fixture::single_pixel(10, 10, 255, 0, 0)};
+	fixture::register_source();
 	obs_frontend_add_event_callback(frontend_event, nullptr);
 	return true;
 }

@@ -84,10 +84,20 @@ float4 PSUp(VertInOut v_in) : TARGET
 }
 
 // 分離型ガウシアン。texel_size の片方を 0 にして方向を決める。
+// σ が 1 画素より十分小さいと離散化したガウシアンの分散が σ² を大きく下回るため、
+// σ < 0.8 では分散がちょうど σ² になる 3 タップ [w, 1 - 2w, w] (w = σ² / 2) を使う。
 // GLSL は C 形式のキャストを許さないため、型変換はコンストラクタ形式で書く
 float4 PSGauss(VertInOut v_in) : TARGET
 {
-    float sum = mask_image.Sample(linearClamp, v_in.uv).r;
+    float center = mask_image.Sample(linearClamp, v_in.uv).r;
+    if (gauss_sigma < 0.8) {
+        float w = 0.5 * gauss_sigma * gauss_sigma;
+        float side = mask_image.Sample(linearClamp, v_in.uv + texel_size).r +
+                     mask_image.Sample(linearClamp, v_in.uv - texel_size).r;
+        float t = center * (1.0 - 2.0 * w) + side * w;
+        return float4(t, t, t, t);
+    }
+    float sum = center;
     float weight_sum = 1.0;
     float inv = 1.0 / (2.0 * gauss_sigma * gauss_sigma);
     for (int i = 1; i <= gauss_taps; i++) {
