@@ -25,3 +25,5 @@
 - [ロゴ](images/logo.svg): 「影」の字に影を付けたSVGです。字形をパスで定義しているため、表示環境のフォントに依存しません。
 
 - [掲載用ロゴ](images/logo.png): SVGから書き出した512×512ピクセルのPNGです。
+
+- [操作の様子](images/obs-simple-drop-shadow.gif): 作者がScreenToGifで収録した、1.0.0のフィルタ設定画面のGIFです。READMEとOBS Forumの概要欄に掲載しています。
