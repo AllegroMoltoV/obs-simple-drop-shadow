@@ -6,6 +6,8 @@ A simple drop shadow filter plugin for OBS Studio.
 
 ![シンプルドロップシャドウのフィルタ設定画面で、X座標・Y座標・ぼかし半径のスライダーを動かす様子](docs/images/obs-simple-drop-shadow.gif)
 
+[配信プラグイン倉庫くん](https://soko-kun.allegromoltov.jp/plugins/allegromoltov/obs-simple-drop-shadow) にも掲載しています。 / Also listed on [Plugin Soko-kun](https://soko-kun.allegromoltov.jp/plugins/allegromoltov/obs-simple-drop-shadow?lang=en).
+
 ## Features / 機能
 
 映像ソースに影を追加するエフェクトフィルタです。影はソースの外側まで描画され、フィルタの出力は影の分だけ広がります。ぼかしはガウシアンに近い柔らかな形で、半径 1024 でも 1080p のソースで 1ms 前後の GPU 時間に収まります (RTX 3060 Ti で測定)。
