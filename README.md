@@ -159,6 +159,10 @@ AllegroMoltoV - https://www.allegromoltov.jp
 
 ## Changelog / 更新情報
 
+### v1.0.2 (2026-11-13)
+
+- リリースの配布物にビルドの来歴の証明 (GitHub Artifact Attestation) を付けるようにしました。プラグインの動作は v1.0.1 と同じです。
+
 ### v1.0.1 (2026-11-09)
 
 - 配信プラグイン倉庫くん (https://soko-kun.allegromoltov.jp) に表示するロゴと説明の画像を、`.soko-kun/` に追加しました。プラグインの動作は v1.0.0 から変わりません。
