@@ -1,4 +1,4 @@
-# Simple Drop Shadow Plugin for OBS Studio
+# シンプルなドロップシャドウ / Simple Drop Shadow
 
 OBS Studio 向けのシンプルなドロップシャドウフィルタプラグインです。
 
